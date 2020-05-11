@@ -1,0 +1,123 @@
+---
+title: "Statistical Data Mining: Apriori Algorithm using Boston Data"
+author: 'Thankam Abish'
+date: 'February 22, 2020'
+output:
+  html_document:
+    df_print: paged
+---
+```{r echo = T, results = 'hide', message=FALSE, warning=FALSE}
+library("arules")
+library("philentropy")
+library(MASS)
+data(Boston)
+dim(Boston)
+head(Boston)
+```
+
+
+```{r}
+x11()
+par(mfrow = c(2,2))
+attach(Boston)
+hist(Boston$crim, breaks = 0 + (0:20)*5, main = "Frequency of Crime", xlab = "Crime")
+hist(Boston$indus, main = "Frequency of Non-Retail business", xlab = "Non-Retail Business (acres/town)")
+hist(Boston$chas, main = "Frequency of Tracts Bounding River", xlab = "Tract bounded River")
+hist(Boston$rm, main = "Frequency of Average Room Number", xlab = "Average Number of Roomes")
+```
+
+
+```{r}
+x11()
+par(mfrow = c(2,2))
+hist(Boston$age, main = "Frequency of owner-occupied units built prior to 1940", xlab = "Owner-occupied units built before 1940")
+hist(Boston$dis, main = "Frequency of mean distance to 5 Boston employment centres", xlab = "Mean of distances to 5 Boston employment centres")
+hist(Boston$rad, main = "Frequency of accessibility to radial highways")
+hist(Boston$tax, main = "Frequency of Property-tax Rate", xlab = "Property-tax rate per $10,000")
+
+```
+
+
+```{r}
+x11()
+par(mfrow = c(2,2))
+hist(Boston$ptratio, main = "Frequency of Pupil-Teacher ratio", xlab = "Pupil-Teacher ratio by town")
+hist(Boston$black, main = "Frequency of proportion of blacks", xlab = "Proportion of blacks by town")
+hist(Boston$zn, main = "Frequency of residential land", xlab = "Proportion of residential land zoned over 25,000 sq ft")
+```
+
+
+```{r}
+x11()
+hist(Boston$lstat, main = "Frequency of lower status of the population", xlab = "Percentage of lower status of population")
+x11()
+hist(Boston$medv,  main = "Frequency of median value of owner-occuped homes", xlab = "Median value of owner-occupied homes in $1,000")
+```
+
+
+```{r}
+
+##Eliminate Variables
+Boston[["nox"]] <- NULL
+
+##Create grouping categories
+Boston[["age"]] <- ordered(cut(Boston[["age"]], c(0,30,60,110)), labels = c("new", "average", "old"))
+Boston[["indus"]] <- ordered(cut(Boston[["indus"]], c(0, 10, 20, 40)), labels = c("low", "medium", "high"))
+Boston[["zn"]] <- ordered(cut(Boston[["zn"]], c(0, 30, 60, 100)), labels = c("low", "medium", "high"))
+Boston[["crim"]] <- ordered(cut(Boston[["crim"]], c(0, 5, 20, 80)), labels = c("Low Crime", "Middle Crime", "High Crime"))
+Boston[["chas"]] <- ordered(cut(Boston[["chas"]], c(-1, 0, 1.0)), labels = c("Not Bounding River", "Tract Bounding River"))
+Boston[["rm"]] <- ordered(cut(Boston[["rm"]], c(0, 5, 7, 9)), labels = c("Low Rooms", "Medium Rooms", "High Rooms"))
+Boston[["dis"]] <- ordered(cut(Boston[["dis"]], c(0,3,8,14)), labels = c("Near", "Mid distant", "Far"))
+Boston[["rad"]] <- ordered(cut(Boston[["rad"]], c(0,5,15,30)), labels = c("Near", "Mid distant", "Far"))
+Boston[["tax"]] <- ordered(cut(Boston[["tax"]], c(0, 300, 500, 900)), labels = c("Low Tax", "Medium Tax", "High Tax"))
+Boston[["ptratio"]] <- ordered(cut(Boston[["ptratio"]], c(0, 15, 19, 23)), labels = c("Small Ratio", "Medium Ratio", "High Ratio"))
+Boston[["black"]] <- ordered(cut(Boston[["black"]], c(0,150,300,450)), labels = c("Low", "Medium", "High"))
+Boston[["lstat"]] <- ordered(cut(Boston[["lstat"]], c(0,15,30,45)), labels = c("Low", "Medium", "High"))
+Boston[["medv"]] <- ordered(cut(Boston[["medv"]], c(0, 20, 40, 60)), labels = c("Low", "Medium", "High"))
+
+##Create binary Incidence Matrix
+Bost <- as(Boston, "transactions")
+summary(Bost)
+```
+
+
+```{r}
+##Part (b) itemFrequencyPlot from "arules" package
+x11()
+itemFrequencyPlot(Bost, support = 0.05, cex.names = 0.8)
+
+##Apply apriori algorithm
+rules  <- apriori(Bost, parameter = list(support = 0.001, confidence = 0.8))
+rules
+##Part (c) Rules for low crime area, close distance
+ruleslowDislowCrim <- subset(rules, subset = lhs %in% "dis=Near" & rhs %in% "crim=Low Crime" & lift>1.2)
+ruleslowDislowCrim
+inspect(head(sort(ruleslowDislowCrim, by = "confidence"), n = 5))
+
+ruleslowCrimlowDis <- subset(rules, subset = lhs %in% "crim=Low Crime" & rhs %in% "dis=Near" &lift>1.2)
+ruleslowCrimlowDis
+inspect(head(sort(ruleslowCrimlowDis, by = "confidence"), n = 5))
+```
+
+```{r}
+##Part (d) Rules for low pupil-teacher ratio
+ruleslowpt <- subset(rules, subset = rhs %in% "ptratio=Small Ratio" & lift>1.2)
+ruleslowpt
+inspect(head(sort(ruleslowpt, by = "confidence"), n=5))
+```
+
+
+```{r}
+##Part (e) Regression model to solve d
+data(Boston)
+set.seed(123)
+trainingIndex <- sample(1:nrow(Boston), 0.8*nrow(Boston))
+training <- Boston[trainingIndex, ]
+testing <- Boston[-trainingIndex, ]
+ytest <- testing$ptratio
+lm.fit <- lm(ptratio ~ ., data = training)
+ypred <- predict(lm.fit, testing, interval = "confidence")
+error <- mean((ypred-ytest)^2)
+error
+```
+
